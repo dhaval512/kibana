@@ -20,49 +20,89 @@
 import 'ui/doc_table';
 
 import { EmbeddableFactory } from 'ui/embeddable';
-import {
-  EmbeddableInstanceConfiguration,
-  OnEmbeddableStateChanged,
-} from 'ui/embeddable/embeddable_factory';
+import { EmbeddableInstanceConfiguration, OnEmbeddableStateChanged } from 'ui/embeddable';
 import { SavedSearchLoader } from '../types';
-import { SearchEmbeddable } from './search_embeddable';
+import { SearchEmbeddable, SearchInput, SearchOutput } from './search_embeddable';
 
-export class SearchEmbeddableFactory extends EmbeddableFactory {
+export const SEARCH_EMBEDDABLE_TYPE = 'search';
+
+export class SearchEmbeddableFactory extends EmbeddableFactory<SearchInput, SearchOutput> {
   constructor(
     private $compile: ng.ICompileService,
     private $rootScope: ng.IRootScopeService,
     private searchLoader: SavedSearchLoader
   ) {
-    super({ name: 'search' });
+    super({ name: SEARCH_EMBEDDABLE_TYPE });
   }
 
   public getEditPath(panelId: string) {
     return this.searchLoader.urlFor(panelId);
   }
 
+  public getOutputSpec() {
+    return {
+      ['title']: {
+        displayName: 'Title',
+        description: 'The title of the element',
+        accessPath: 'title',
+        id: 'title',
+      },
+      ['timeRange']: {
+        displayName: 'Time range',
+        description: 'The time range. Object type that has from and to nested properties.',
+        accessPath: 'timeRange',
+        id: 'timeRange',
+      },
+      ['filters']: {
+        displayName: 'Filters',
+        description: 'The filters applied to the current view',
+        accessPath: 'filters',
+        id: 'filters',
+      },
+      ['query.query']: {
+        displayName: 'Query',
+        description: 'The query applied to the current view',
+        accessPath: 'query',
+        id: 'query',
+      },
+      ['dynamic filtering field name']: {
+        displayName: 'Clicked filter',
+        description: 'A filter that was clicked on',
+        accessPath: 'actionContext.clickContext.fieldName',
+        id: 'clickContext',
+      },
+      ['dynamic filtering field value']: {
+        displayName: 'Clicked filter',
+        description: 'A filter that was clicked on',
+        accessPath: 'actionContext.clickContext.fieldValue',
+        id: 'clickContext',
+      },
+    };
+  }
+
   /**
    *
-   * @param {Object} panelMetadata. Currently just passing in panelState but it's more than we need, so we should
+   * @param panelMetadata. Currently just passing in panelState but it's more than we need, so we should
    * decouple this to only include data given to us from the embeddable when it's added to the dashboard. Generally
    * will be just the object id, but could be anything depending on the plugin.
    * @param onEmbeddableStateChanged
-   * @return {Promise.<Embeddable>}
+   * @return
    */
-  public create(
-    { id }: EmbeddableInstanceConfiguration,
-    onEmbeddableStateChanged: OnEmbeddableStateChanged
-  ) {
+  public create({ id }: EmbeddableInstanceConfiguration, initialInput: SearchInput) {
     const editUrl = this.getEditPath(id);
 
     // can't change this to be async / awayt, because an Anglular promise is expected to be returned.
     return this.searchLoader.get(id).then(savedObject => {
-      return new SearchEmbeddable({
-        onEmbeddableStateChanged,
-        savedSearch: savedObject,
-        editUrl,
-        $rootScope: this.$rootScope,
-        $compile: this.$compile,
-      });
+      return new SearchEmbeddable(
+        {
+          savedSearch: savedObject,
+          editUrl,
+          $rootScope: this.$rootScope,
+          $compile: this.$compile,
+          factory: this,
+        },
+        initialInput
+      );
     });
   }
 }

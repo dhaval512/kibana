@@ -17,18 +17,13 @@
  * under the License.
  */
 
-import { Action } from './action';
+import { SimpleSavedObject } from 'ui/saved_objects';
+import { SavedObjectAttributes } from '../../../../server/saved_objects';
 
-class ActionsRegistry {
-  private actions: { [key: string]: Action<any, any> } = {};
-
-  public registerAction(action: Action<any, any>) {
-    this.actions[action.id] = action;
-  }
-
-  public getActionById(id: string) {
-    return this.actions[id];
-  }
+export interface TriggerSavedObjectAttributes extends SavedObjectAttributes {
+  description: string;
+  title: string;
+  actions: string;
 }
 
-export const actionRegistry = new ActionsRegistry();
+export type TriggerSavedObject = SimpleSavedObject<TriggerSavedObjectAttributes>;

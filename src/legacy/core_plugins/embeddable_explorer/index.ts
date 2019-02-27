@@ -17,20 +17,31 @@
  * under the License.
  */
 
-import React from 'react';
-import PropTypes from 'prop-types';
-import { store } from '../../store';
-import { Provider } from 'react-redux';
-import { DashboardViewportContainer } from './dashboard_viewport_container';
+import { Legacy } from 'kibana';
+// @ts-ignore
+import { injectVars } from '../kibana/inject_vars';
+import { Plugin as EmbeddableExplorer } from './plugin';
+import { createShim } from './shim';
 
-export function DashboardViewportProvider(props) {
-  return (
-    <Provider store={store}>
-      <DashboardViewportContainer {...props} />
-    </Provider>
-  );
+export type CoreShim = object;
+
+// tslint:disable-next-line
+export default function(kibana: any) {
+  return new kibana.Plugin({
+    require: ['kibana'],
+    uiExports: {
+      app: {
+        title: 'Embeddable Explorer',
+        order: 1,
+        main: 'plugins/embeddable_explorer',
+      },
+    },
+    init(server: Legacy.Server) {
+      const embeddableExplorer = new EmbeddableExplorer(server);
+      embeddableExplorer.start(createShim());
+
+      // @ts-ignore
+      server.injectUiAppVars('embeddable_explorer', () => injectVars(server));
+    },
+  });
 }
-
-DashboardViewportProvider.propTypes = {
-  getEmbeddableFactory: PropTypes.func.isRequired,
-};

@@ -17,25 +17,114 @@
  * under the License.
  */
 
-import { Embeddable } from '../embeddables';
+import { Container } from 'ui/embeddable/containers';
+import { AnyEmbeddable, Embeddable } from '../embeddables';
 
-export interface ExecuteOptions<C, A> {
-  embeddable: Embeddable<C, any>;
-  containerContext: C;
-  actionContext: A;
+import {
+  ActionSavedObject,
+  ActionSavedObjectAttributes,
+} from 'ui/embeddable/actions/action_saved_object';
+export interface ExecuteOptions<ActionEmbeddable, ActionContainer> {
+  embeddable: ActionEmbeddable;
+  container: ActionContainer;
 }
 
-export abstract class Action<C, A> {
-  public readonly id: string;
-  constructor({ id }: { id: string }) {
-    this.id = id;
-  }
-  public abstract execute(executeOptions: ExecuteOptions<C, A>): void;
-  public abstract isCompatable({
-    embeddable,
-    containerContext,
+export type AnyAction = Action<any, any, any>;
+
+export abstract class Action<
+  ContainerState,
+  ActionEmbeddable extends Embeddable<ContainerState, any>,
+  ActionContainer extends Container<any, any, ContainerState>
+> {
+  public id?: string;
+  public title: string;
+  public embeddableType: string = ''; // If empty, shows up for all elements
+  public embeddableId: string = ''; // If empty, shows up for all instances
+  public readonly type: string;
+  public description: string = '';
+
+  public embeddableTemplateMapping: { [key: string]: string } = {};
+
+  constructor({
+    actionSavedObject,
+    type,
   }: {
-    embeddable: Embeddable<C, any>;
-    containerContext: C;
+    actionSavedObject?: ActionSavedObject;
+    type: string;
+  }) {
+    this.id = actionSavedObject ? actionSavedObject.id : undefined;
+    this.title = actionSavedObject ? actionSavedObject.attributes.title : '';
+    this.type =
+      actionSavedObject && actionSavedObject.attributes.type
+        ? actionSavedObject.attributes.type
+        : type;
+  }
+
+  public abstract isCompatible({
+    embeddable,
+    container,
+  }: {
+    embeddable: ActionEmbeddable;
+    container: ActionContainer;
   }): Promise<boolean>;
+
+  public abstract execute(executeOptions: ExecuteOptions<ActionEmbeddable, ActionContainer>): void;
+
+  public getSavedObjectAttributes(): ActionSavedObjectAttributes {
+    return {
+      title: this.title,
+      embeddableType: this.embeddableType,
+      type: this.type,
+      embeddableId: this.embeddableId,
+      description: this.description,
+      configuration: this.getConfiguration(),
+      embeddableTemplateMapping: this.mappingToString(),
+    };
+  }
+
+  public updateConfiguration(config: string) {
+    return;
+  }
+
+  public mappingToString() {
+    return JSON.stringify(this.embeddableTemplateMapping);
+  }
+
+  public mappingFromString(mapping: string) {
+    this.embeddableTemplateMapping = JSON.parse(mapping);
+  }
+
+  public getConfiguration() {
+    return '';
+  }
+
+  protected flatten(shape: { [key: string]: any }, prefix = '') {
+    let output: { [key: string]: string } = {};
+    Object.keys(shape).map(key => {
+      const value = shape[key];
+      if (Array.isArray(value) || typeof value === 'object') {
+        output = {
+          ...output,
+          ...this.flatten(shape[key], prefix + key + '.'),
+        };
+      } else {
+        output[prefix + key] = value;
+      }
+    });
+    return output;
+  }
+
+  protected injectTemplateParameters(template: string, embeddable: AnyEmbeddable) {
+    let output = template;
+    const mapping = this.embeddableTemplateMapping;
+    const embeddableOutput = { ...embeddable.getOutput() };
+    delete embeddableOutput.indexPatterns;
+    const flattenedOutput = this.flatten(embeddableOutput);
+    Object.keys(mapping).forEach(name => {
+      const path = mapping[name];
+      const replaceValue = `\$\{${name}\}`;
+      output = output.replace(replaceValue, flattenedOutput[path]);
+    });
+    return output;
+  }
 }
